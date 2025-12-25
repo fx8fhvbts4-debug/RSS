@@ -504,25 +504,16 @@ else:
         # Filtrar apenas notícias da última 1 hora (3600 segundos)
         # Feedparser retorna UTC naive, então comparamos com utcnow naive
         now_utc = datetime.utcnow()
-        # Filtrar apenas notícias da última 1 hora (3600 segundos)
-        # Debug: Coletar itens ignorados para mostrar ao usuário se necessário
+        # Filtrar apenas notícias das últimas 3 horas (10800 segundos)
+        # Ajustado para garantir que fontes com atualizações menos frequentes apareçam
         now_utc = datetime.utcnow()
-        final_news = []
-        ignored_news = []
-        
-        for item in news_items:
-            age_seconds = (now_utc - item['published']).total_seconds()
-            if 0 <= age_seconds <= 3600:
-                final_news.append(item)
-            else:
-                item['age_debug'] = age_seconds
-                ignored_news.append(item)
-        
-        news_items = final_news
+        news_items = [
+            item for item in news_items 
+            if 0 <= (now_utc - item['published']).total_seconds() <= 10800
+        ]
     
     if not news_items:
-        st.warning("Nenhuma notícia encontrada na última 1 hora.")
-    else:
+        st.warning("Nenhuma notícia encontrada nas últimas 3 horas.")
         # Layout em Grid/Lista
         for i, item in enumerate(news_items[:20]): # Limite fixo de 20 para performance
             
@@ -590,11 +581,3 @@ else:
                                 st.info(f"**Resumo da Notícia:**\n\n{resumo}")
                             else:
                                 st.error("Erro ao ler artigo. (Site pode bloquear scrapers)")
-        
-        # --- Debug Section (Expander no final) ---
-        if ignored_news:
-             with st.expander("🛠️ Debug: Notícias Ignoradas (> 1h ou Timezone incorreto)", expanded=False):
-                st.write(f"Total ignorado: {len(ignored_news)}")
-                for ignore in ignored_news:
-                    age_h = ignore['age_debug'] / 3600
-                    st.write(f"- **{ignore['source']}**: {ignore['title']} (Idade calculada: {age_h:.2f} horas)")
