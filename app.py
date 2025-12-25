@@ -500,16 +500,16 @@ else:
     with st.spinner("Atualizando feed..."):
         news_items = fetch_feeds(rss_urls)
         
-        # Filtrar apenas notícias das últimas 2 horas (7200 segundos)
+        # Filtrar apenas notícias da última 1 hora (3600 segundos)
         # Feedparser retorna UTC naive, então comparamos com utcnow naive
         now_utc = datetime.utcnow()
         news_items = [
             item for item in news_items 
-            if 0 <= (now_utc - item['published']).total_seconds() <= 7200
+            if 0 <= (now_utc - item['published']).total_seconds() <= 3600
         ]
     
     if not news_items:
-        st.warning("Nenhuma notícia encontrada nas últimas 2 horas.")
+        st.warning("Nenhuma notícia encontrada na última 1 hora.")
     else:
         # Layout em Grid/Lista
         for i, item in enumerate(news_items[:20]): # Limite fixo de 20 para performance
