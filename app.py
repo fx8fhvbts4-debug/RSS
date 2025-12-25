@@ -6,6 +6,9 @@ import time
 from datetime import datetime, timedelta
 import nltk
 from bs4 import BeautifulSoup
+import requests
+from duckduckgo_search import DDGS
+import json
 
 try:
     nltk.data.find('tokenizers/punkt')
@@ -242,10 +245,107 @@ def summarize_with_gemini(text, api_key):
             errors.append(f"{model_name}: {str(e)}")
             continue
             
-    # Se chegou aqui, nenhum funcionou. Vamos listar o que ESTÁ disponível.
     # Se chegou aqui, nenhum funcionou
     error_msg = "\n".join(errors)
     return f"❌ Falha ao gerar resumo. Erros:\n{error_msg}"
+
+# --- Eventos BH Backend ---
+BH_EVENT_SOURCES = [
+    "https://www.sympla.com.br/eventos/belo-horizonte-mg",
+    "https://bhaz.com.br/agenda-bh/",
+    "https://www.soubh.com.br/eventos"
+]
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_bh_events(api_key):
+    """
+    Busca eventos em BH usando DuckDuckGo e estrutura com Gemini.
+    """
+    if not api_key:
+        return []
+
+    genai.configure(api_key=api_key)
+    # Tenta usar um modelo rápido, com fallback caso mude
+    model_name_events = 'gemini-1.5-flash' # Modelo rápido e barato
+    try:
+         model = genai.GenerativeModel(model_name_events)
+    except:
+         model = genai.GenerativeModel('gemini-pro')
+    
+    events_content = ""
+    
+    # 1. Busca ativa no DuckDuckGo
+    try:
+        with DDGS() as ddgs:
+            # Busca genérica
+            results = list(ddgs.text("eventos culturais bh hoje fim de semana", region="br-br", timelimit="w", max_results=5))
+            for res in results:
+                events_content += f"\nSOURCE: {res['title']} ({res['href']})\n{res['body']}\n"
+    except Exception as e:
+        print(f"Erro no DDG: {e}")
+
+    # 2. Prompt para o Gemini
+    prompt = f"""
+    Você é um assistente cultural especializado em Belo Horizonte.
+    Analise o texto cru abaixo (que contém resultados de busca sobre eventos em BH) e extraia uma lista de eventos CULTURAIS confirmados para hoje e próximos dias.
+    Ignorar eventos passados. Focar em Música, Teatro, Exposições e Cinema.
+    
+    TEXTO CRU:
+    {events_content[:15000]} # Limite de chars para segurança
+
+    SAÍDA ESPERADA:
+    Apenas um JSON puro (sem markdown ```json) contendo uma lista de objetos com:
+    - title: Nome do evento
+    - date: Data e Hora (formato legível, ex: "Hoje, 20h" ou "Sáb, 15/10 - 14h")
+    - location: Local do evento
+    - description: Uma frase curta sobre o que é
+    - price: Preço (ex: "Gratuito", "R$ 20", "A partir de R$ 50")
+    - image: Se encontrar URL de imagem no texto, use. Se não, deixe null.
+    """
+    
+    try:
+        response = model.generate_content(prompt)
+        # Limpeza básica caso venha com markdown
+        text_resp = response.text
+        if "```json" in text_resp:
+            text_resp = text_resp.split("```json")[1].split("```")[0]
+        elif "```" in text_resp:
+             text_resp = text_resp.split("```")[1].split("```")[0]
+             
+        data = json.loads(text_resp.strip())
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        # Se falhar no JSON, retorna lista vazia
+        print(f"Erro parser JSON eventos: {e}")
+        return []
+
+        return []
+
+# --- Session State (Global) ---
+if 'time_window_sec' not in st.session_state:
+    st.session_state['time_window_sec'] = 5400
+if 'max_items' not in st.session_state:
+    st.session_state['max_items'] = 20
+if 'page' not in st.session_state:
+    st.session_state['page'] = 'news'
+
+@st.cache_data(show_spinner=False)
+def get_article_image(url):
+    """
+    Tenta capturar a imagem principal do artigo usando newspaper3k
+    caso o feed RSS não tenha fornecido.
+    """
+    if not url:
+        return None
+    try:
+        article = Article(url)
+        article.download()
+        article.parse()
+        if article.top_image:
+            return article.top_image
+    except:
+        return None
+    return None
 
 # -----------------------------------------------------------------------------
 # Interface do Usuário (SideBar)
@@ -414,10 +514,18 @@ with col_refresh:
     st.write("") 
     st.write("")
     
-    # Botão Ghost style
-    if st.button("Atualizar", key="refresh_btn", help="Buscar novas notícias"):
-        st.cache_data.clear()
-        st.rerun()
+    # Navegação e Refresh
+    col_nav_1, col_nav_2 = st.columns([1, 1])
+    
+    with col_nav_1:
+         if st.button("🎭 Agenda", help="Ver Agenda Cultural"):
+             st.session_state['page'] = 'events'
+             st.rerun()
+             
+    with col_nav_2:
+        if st.button("Atualizar", key="refresh_btn", help="Buscar novas notícias"):
+            st.cache_data.clear()
+            st.rerun()
 
 # CSS Específico para o botão Ghost no Header e Correção Mobile
 st.markdown("""
@@ -430,14 +538,11 @@ st.markdown("""
         height: 100%;
     }
 
-    button[key="refresh_btn"] {
-        background-color: transparent !important;
+    button[key="refresh_btn"], button[kind="secondary"] {
         border: none !important;
-        color: #007AFF !important;
         font-weight: 600 !important;
-        font-size: 16px !important;
+        font-size: 14px !important;
         box-shadow: none !important;
-        padding: 0px !important;
     }
     button[key="refresh_btn"]:hover {
         color: #0056b3 !important;
@@ -480,52 +585,29 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Feed Logic (Carregado apenas dos Secrets) ---
-if "RSS_FEEDS" in st.secrets:
-    rss_urls = [url.strip() for url in st.secrets["RSS_FEEDS"].split('\n') if url.strip()]
-else:
-    st.warning("⚠️ Nenhuma fonte de notícias configurada em .streamlit/secrets.toml")
-    rss_urls = []
-    
-# Check de API Key
-if "GOOGLE_API_KEY" in st.secrets:
-    api_key_input = st.secrets["GOOGLE_API_KEY"]
-else:
-    # Fallback se não tiver no secrets (o que não deve acontecer se estiver tudo config)
-    api_key_input = None
-    st.error("⚠️ Google API Key não encontrada em secrets.toml")
+# --- Feed Logic (Routes) ---
+if st.session_state['page'] == 'news':
+    # === PÁGINA DE NOTÍCIAS (News Feed Original) ===
+    if "RSS_FEEDS" in st.secrets:
+        rss_urls = [url.strip() for url in st.secrets["RSS_FEEDS"].split('\n') if url.strip()]
+    else:
+        st.warning("⚠️ Nenhuma fonte de notícias configurada em .streamlit/secrets.toml")
+        rss_urls = []
+        
+    # Check de API Key
+    if "GOOGLE_API_KEY" in st.secrets:
+        api_key_input = st.secrets["GOOGLE_API_KEY"]
+    else:
+        # Fallback se não tiver no secrets (o que não deve acontecer se estiver tudo config)
+        api_key_input = None
+        st.error("⚠️ Google API Key não encontrada em secrets.toml")
 
-# --- Session State (Paginação/Load More) ---
-if 'time_window_sec' not in st.session_state:
-    st.session_state['time_window_sec'] = 5400  # Começa com 90 min
-if 'max_items' not in st.session_state:
-    st.session_state['max_items'] = 20 # Começa com 20 itens
 
-@st.cache_data(show_spinner=False)
-def get_article_image(url):
-    """
-    Tenta capturar a imagem principal do artigo usando newspaper3k
-    caso o feed RSS não tenha fornecido.
-    """
-    if not url:
-        return None
-    try:
-        article = Article(url)
-        article.download()
-        article.parse()
-        if article.top_image:
-            return article.top_image
-    except:
-        return None
-    return None
-
-    return None
-
-if not rss_urls:
-    pass # Mensagem de warning ja exibida acima
-else:
-    with st.spinner("Atualizando feed..."):
-        news_items, feed_stats = fetch_feeds(rss_urls)
+    if not rss_urls:
+        pass # Mensagem de warning ja exibida acima
+    else:
+        with st.spinner("Atualizando feed..."):
+            news_items, feed_stats = fetch_feeds(rss_urls)
         
         # Filtrar apenas notícias da última 1 hora (3600 segundos)
         # Feedparser retorna UTC naive, então comparamos com utcnow naive
@@ -616,9 +698,48 @@ else:
         
         # --- Botão Carregar Mais (No final da lista) ---
         # Se houver notícias (ou mesmo se não houver, pra tentar buscar mais antigas), mostra o botão
-        st.markdown("---")
-        col_more, _ = st.columns([1, 2])
-        if col_more.button("Carregar mais notícias"):
-            st.session_state['time_window_sec'] += 5400 # +90 min
-            st.session_state['max_items'] += 20 # Mostra mais 20 itens
-            st.rerun()
+            st.markdown("---")
+            col_more, _ = st.columns([1, 2])
+            if col_more.button("Carregar mais notícias"):
+                st.session_state['time_window_sec'] += 5400 # +90 min
+                st.session_state['max_items'] += 20 # Mostra mais 20 itens
+                st.rerun()
+
+elif st.session_state['page'] == 'events':
+    # === PÁGINA DE EVENTOS (Agenda Cultural) ===
+    st.markdown("### 🎭 Agenda Cultural BH")
+    
+    if st.button("⬅️ Voltar para Notícias"):
+        st.session_state['page'] = 'news'
+        st.rerun()
+
+    api_key = st.secrets.get("GOOGLE_API_KEY")
+    with st.spinner("🔍 Pesquisando eventos em BH e organizando com IA..."):
+        events = fetch_bh_events(api_key)
+    
+    if not events:
+        st.warning("Não encontrei eventos confirmados no momento. Tente novamente mais tarde.")
+    else:
+        # Grid Layout
+        cols = st.columns(2) # 2 colunas para tablets/desktop
+        for i, event in enumerate(events):
+            col = cols[i % 2]
+            with col:
+                with st.container(border=True):
+                    # Imagem
+                    if event.get('image'):
+                         st.image(event['image'], use_container_width=True)
+                    else:
+                         # Placeholder bonitinho
+                         st.markdown("🎭", unsafe_allow_html=True)
+                    
+                    # Titulo
+                    st.markdown(f"**{event.get('title', 'Evento')}**")
+                    
+                    # Info
+                    st.markdown(f"📅 {event.get('date', 'Data a confirmar')}")
+                    st.markdown(f"📍 {event.get('location', 'BH')}")
+                    st.markdown(f"💰 {event.get('price', '-')}")
+                    
+                    # Descrição
+                    st.caption(event.get('description', ''))
