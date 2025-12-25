@@ -19,6 +19,10 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- Session State (Global Theme) ---
+if 'theme' not in st.session_state:
+    st.session_state['theme'] = 'light'
+
 # Estilização Customizada
 st.markdown("""
 <style>
@@ -275,128 +279,72 @@ def summarize_with_gemini(text, api_key):
 # -----------------------------------------------------------------------------
 
 # CSS Apple HIG Style
-st.markdown("""
-<style>
-    /* 1. Tipografia Global Apple System */
-    html, body, [class*="css"] {
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif !important;
-    }
-
-    /* 2. Cores de Fundo - iOS Light Gray - Adjusted for contrast */
-    .stApp {
-        background-color: #EBEBF0 !important;
-    }
-
-    /* Remove sidebar space if needed and adjust container */
-    [data-testid="stSidebar"] { display: none; }
-    
-    .block-container {
-        padding-top: 3rem;
-        padding-bottom: 5rem;
-        max-width: 900px;
-    }
-
-    h1 {
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        color: #1C1C1E;
-        font-weight: 700;
-        font-size: 32px;
-        letter-spacing: -0.5px;
-        margin-bottom: 24px;
-    }
-
-    /* 3. Cartões de Notícias (Apple Widget Style) */
-    /* Target o container com borda do Streamlit */
+# CSS Apple HIG Style (Dynamic)
+css_light = """
+    /* 2. Cores de Fundo - iOS Light */
+    .stApp { background-color: #F8F9FA !important; }
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
-        border-radius: 18px !important;
-        border: none !important; /* Remove borda do Streamlit */
-        box-shadow: 0 6px 16px rgba(0,0,0,0.08) !important;
-        padding: 24px !important; /* Espaço generoso */
-        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
     }
+    h1, h2, h3, p, span, div { color: #1C1C1E; }
+    .news-title a { color: #1C1C1E !important; }
+    .news-source, .news-meta, .news-time { color: #8E8E93 !important; }
+    div[data-testid="stAlert"] { background-color: #F2F5F8 !important; color: #333333 !important; }
+"""
 
-    /* 4. Botões (iOS Action Style) - Principalmente "Resumo com IA" */
-    .stButton button {
-        background-color: #007AFF !important; /* Apple Blue */
-        color: white !important;
-        border: none !important;
-        border-radius: 20px !important; /* Pill shape */
-        padding: 8px 20px !important;
-        font-weight: 600 !important;
-        font-size: 15px !important;
-        transition: opacity 0.2s ease-in-out;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+css_dark = """
+    /* 2. Cores de Fundo - iOS Dark */
+    .stApp { background-color: #000000 !important; }
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #1C1C1E !important;
+        box-shadow: 0 4px 12px rgba(255,255,255,0.05) !important;
     }
+    h1, h2, h3, p, span, div { color: #FFFFFF; }
+    .news-title a { color: #FFFFFF !important; }
+    .news-source, .news-meta, .news-time { color: #98989D !important; }
+    div[data-testid="stAlert"] { background-color: #2C2C2E !important; color: #E5E5EA !important; }
     
-    .stButton button:hover {
+    /* Specific Dark Mode overrides */
+    div[data-testid="stMarkdownContainer"] p { color: #E5E5EA !important; }
+    h1 { color: #FFFFFF !important; }
+"""
+
+active_css = css_light if st.session_state['theme'] == 'light' else css_dark
+
+st.markdown(f"""
+<style>
+    /* 1. Tipografia Global Apple System */
+    html, body, [class*="css"] {{
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif !important;
+    }}
+    
+    /* Buttons Common */
+    .stButton button {{
         background-color: #007AFF !important;
         color: white !important;
         border: none !important;
-        opacity: 0.8 !important; /* Efeito de opacidade iOS */
-    }
-    
-    .stButton button:active {
-        opacity: 0.6;
-    }
+        border-radius: 20px !important;
+    }}
 
-    /* 5. Tipografia Títulos e Metadados */
-    .news-title a {
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif !important;
-        color: #1C1C1E !important; /* Preto Sólido */
-        font-weight: 600 !important; /* Semi-Bold */
-        font-size: 20px !important;
-        text-decoration: none;
-        letter-spacing: -0.01em;
-        line-height: 1.3;
-    }
-    .news-title a:hover {
-        opacity: 0.7; /* Feedback visual sutil */
-        color: #1C1C1E !important;
-        text-decoration: none;
-    }
+    /* CSS Dinâmico (Light/Dark) */
+    {active_css}
     
-    .news-header-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 12px;
-    }
-
-    /* Fonte e Data Metadados */
-    .news-source, .news-meta, .news-time {
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif !important;
-        color: #8E8E93 !important; /* Cinza Secundário Apple */
-        font-size: 13px !important;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
+    /* Outros ajustes globais */
+    [data-testid="stSidebar"] {{ display: none; }}
+    .block-container {{
+        padding-top: 3rem;
+        padding-bottom: 5rem;
+        max-width: 900px;
+    }}
+    a {{ text-decoration: none; }}
     
-    .news-summary {
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        font-size: 15px;
-        color: #3A3A3C; /* Cinza texto corpo */
-        line-height: 1.5;
-        margin-top: 12px;
-        margin-bottom: 16px;
-        opacity: 0.9;
-    }
-
-    /* 6. Estilização do Contêiner de Resumo (AI Summary Box) */
-    div[data-testid="stAlert"] {
-        background-color: #F2F5F8 !important; /* Azul-acinzentado suave */
-        border: none !important;
-        border-radius: 12px !important;
-        padding: 16px !important; /* Padding reduzido e compacto */
-        color: #333333 !important;
-    }
-    
-    div[data-testid="stAlert"] p {
-        font-size: 15px !important;
-        line-height: 1.4 !important;
-        color: #333333 !important;
-    }
+    /* CSS Específico para o Header Botões */
+    button[key="theme_btn"] {{
+        background-color: transparent !important;
+        color: {'#1C1C1E' if st.session_state['theme'] == 'light' else '#FFFFFF'} !important;
+        border: 1px solid {'#E5E5EA' if st.session_state['theme'] == 'light' else '#3A3A3C'} !important;
+    }}
 
 </style>
 """, unsafe_allow_html=True)
@@ -418,10 +366,10 @@ with col_header:
             <path d="M7 8H17M7 12H17M7 16H13" stroke="white" stroke-width="2" stroke-linecap="round"/>
         </svg>
         <div>
-            <div style="font-family: -apple-system, sans-serif; font-size: 13px; font-weight: 600; color: #8E8E93; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 0px;">
+            <div style="font-family: -apple-system, sans-serif; font-size: 13px; font-weight: 600; color: {'#8E8E93' if st.session_state['theme'] == 'light' else '#98989D'}; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 0px;">
                 {date_str}
             </div>
-            <div style="font-family: -apple-system, sans-serif; font-size: 34px; font-weight: 800; color: #1C1C1E; letter-spacing: -0.5px; line-height: 1.0;">
+            <div style="font-family: -apple-system, sans-serif; font-size: 34px; font-weight: 800; color: {'#1C1C1E' if st.session_state['theme'] == 'light' else '#FFFFFF'}; letter-spacing: -0.5px; line-height: 1.0;">
                 Últimas Notícias
             </div>
         </div>
@@ -434,9 +382,18 @@ with col_refresh:
     st.write("")
     
     # Botão Ghost style
-    if st.button("Atualizar", key="refresh_btn", help="Buscar novas notícias"):
-        st.cache_data.clear()
-        st.rerun()
+    col_theme, col_refresh_btn = st.columns([1, 1])
+    
+    with col_theme:
+        theme_icon = "🌙" if st.session_state['theme'] == 'light' else "☀️"
+        if st.button(theme_icon, key="theme_btn", help="Alternar Tema Claro/Escuro"):
+            st.session_state['theme'] = 'dark' if st.session_state['theme'] == 'light' else 'light'
+            st.rerun()
+            
+    with col_refresh_btn:
+        if st.button("Atualizar", key="refresh_btn", help="Buscar novas notícias"):
+            st.cache_data.clear()
+            st.rerun()
 
 # CSS Específico para o botão Ghost no Header e Correção Mobile
 st.markdown("""
