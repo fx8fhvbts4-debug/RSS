@@ -74,8 +74,10 @@ st.markdown("""
 def fetch_feeds(urls):
     """
     Coleta notícias de uma lista de URLs RSS e as ordena cronologicamente.
+    Retorna: (all_news, feed_stats)
     """
     all_news = []
+    feed_stats = [] # Lista de dicts: {url, status, items, error}
     fixed_now = datetime.utcnow() # Snapshot de tempo para ordenação estável
     
     for url in urls:
@@ -85,6 +87,17 @@ def fetch_feeds(urls):
         try:
             # User-Agent para evitar bloqueios (G1/Globo costuma bloquear bots)
             feed = feedparser.parse(url, agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            
+            # Check se houve erro de bozo/http
+            if feed.bozo and hasattr(feed, 'bozo_exception'):
+                 # Alguns feeds mal formatados dão bozo=1 mas funcionam. Vamos logar como warning.
+                 pass
+            
+            if not feed.entries:
+                 feed_stats.append({'url': url, 'status': '⚠️ Vazio/Falha', 'count': 0, 'error': 'Sem entradas ou bloqueado'})
+            else:
+                 feed_stats.append({'url': url, 'status': '✅ OK', 'count': len(feed.entries), 'error': None})
+
             feed_title = feed.feed.get('title', url)
             
             for entry in feed.entries:
@@ -163,10 +176,11 @@ def fetch_feeds(urls):
                 })
         except Exception as e:
             st.error(f"Erro ao processar feed {url}: {e}")
+            feed_stats.append({'url': url, 'status': '❌ Erro', 'count': 0, 'error': str(e)})
             
     # Ordena: Mais recentes primeiro
     all_news.sort(key=lambda x: x['published'], reverse=True)
-    return all_news
+    return all_news, feed_stats
 
 @st.cache_data(show_spinner=False)
 def extract_article_content(url):
@@ -499,21 +513,22 @@ if not rss_urls:
     pass # Mensagem de warning ja exibida acima
 else:
     with st.spinner("Atualizando feed..."):
-        news_items = fetch_feeds(rss_urls)
+        news_items, feed_stats = fetch_feeds(rss_urls)
         
         # Filtrar apenas notícias da última 1 hora (3600 segundos)
         # Feedparser retorna UTC naive, então comparamos com utcnow naive
         now_utc = datetime.utcnow()
-        # Filtrar apenas notícias das últimas 3 horas (10800 segundos)
-        # Ajustado para garantir que fontes com atualizações menos frequentes apareçam
+        # Filtrar apenas notícias dos últimos 90 minutos (5400 segundos)
+        # Ajustado conforme pedido do usuário
         now_utc = datetime.utcnow()
         news_items = [
             item for item in news_items 
-            if 0 <= (now_utc - item['published']).total_seconds() <= 10800
+            if 0 <= (now_utc - item['published']).total_seconds() <= 5400
         ]
     
-    if not news_items:
-        st.warning("Nenhuma notícia encontrada nas últimas 3 horas.")
+        if not news_items:
+            st.warning("Nenhuma notícia encontrada nos últimos 90 minutos.")
+            
         # Layout em Grid/Lista
         for i, item in enumerate(news_items[:20]): # Limite fixo de 20 para performance
             
@@ -581,3 +596,18 @@ else:
                                 st.info(f"**Resumo da Notícia:**\n\n{resumo}")
                             else:
                                 st.error("Erro ao ler artigo. (Site pode bloquear scrapers)")
+        
+        # --- Debug Section (Config) ---
+        with st.expander("🛠️ Debug: Configuração e Cache", expanded=False):
+            if st.button("🗑️ Limpar Cache e Recarregar"):
+                st.cache_data.clear()
+                st.rerun()
+
+            st.write(f"**Fontes Carregadas:** {len(rss_urls)}")
+            st.markdown("---")
+            st.write("**Status dos Feeds:**")
+            for stat in feed_stats:
+                icon = stat['status']
+                st.write(f"{icon} **{stat['count']} itens** - `{stat['url']}`")
+                if stat['error']:
+                    st.write(f"   > *Erro: {stat['error']}*")
