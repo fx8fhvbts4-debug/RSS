@@ -6,3 +6,4 @@ requests==2.32.3
 lxml>=5.1.0
 beautifulsoup4==4.12.3
 nltk==3.8.1
+lxml_html_clean
