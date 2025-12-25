@@ -393,12 +393,18 @@ col_header, col_refresh = st.columns([3, 1])
 
 with col_header:
     st.markdown(f"""
-    <div style="margin-bottom: 20px;">
-        <div style="font-family: -apple-system, sans-serif; font-size: 13px; font-weight: 600; color: #8E8E93; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 4px;">
-            {date_str}
-        </div>
-        <div style="font-family: -apple-system, sans-serif; font-size: 34px; font-weight: 800; color: #1C1C1E; letter-spacing: -0.5px; line-height: 1.1;">
-            Briefing Diário
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink: 0;">
+            <rect x="2" y="3" width="20" height="18" rx="4" fill="#007AFF"/>
+            <path d="M7 8H17M7 12H17M7 16H13" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div>
+            <div style="font-family: -apple-system, sans-serif; font-size: 13px; font-weight: 600; color: #8E8E93; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 0px;">
+                {date_str}
+            </div>
+            <div style="font-family: -apple-system, sans-serif; font-size: 34px; font-weight: 800; color: #1C1C1E; letter-spacing: -0.5px; line-height: 1.0;">
+                Últimas Notícias
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
