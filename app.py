@@ -597,17 +597,3 @@ else:
                             else:
                                 st.error("Erro ao ler artigo. (Site pode bloquear scrapers)")
         
-        # --- Debug Section (Config) ---
-        with st.expander("🛠️ Debug: Configuração e Cache", expanded=False):
-            if st.button("🗑️ Limpar Cache e Recarregar"):
-                st.cache_data.clear()
-                st.rerun()
-
-            st.write(f"**Fontes Carregadas:** {len(rss_urls)}")
-            st.markdown("---")
-            st.write("**Status dos Feeds:**")
-            for stat in feed_stats:
-                icon = stat['status']
-                st.write(f"{icon} **{stat['count']} itens** - `{stat['url']}`")
-                if stat['error']:
-                    st.write(f"   > *Erro: {stat['error']}*")
