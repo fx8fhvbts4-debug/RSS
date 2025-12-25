@@ -612,7 +612,7 @@ else:
         # Se houver notícias (ou mesmo se não houver, pra tentar buscar mais antigas), mostra o botão
         st.markdown("---")
         col_more, _ = st.columns([1, 2])
-        if col_more.button("🔄 Carregar notícias mais antigas (+90min)"):
+        if col_more.button("Carregar mais notícias"):
             st.session_state['time_window_sec'] += 5400 # +90 min
             st.session_state['max_items'] += 20 # Mostra mais 20 itens
             st.rerun()
