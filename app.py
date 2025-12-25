@@ -489,6 +489,12 @@ else:
     api_key_input = None
     st.error("⚠️ Google API Key não encontrada em secrets.toml")
 
+# --- Session State (Paginação/Load More) ---
+if 'time_window_sec' not in st.session_state:
+    st.session_state['time_window_sec'] = 5400  # Começa com 90 min
+if 'max_items' not in st.session_state:
+    st.session_state['max_items'] = 20 # Começa com 20 itens
+
 @st.cache_data(show_spinner=False)
 def get_article_image(url):
     """
@@ -518,19 +524,22 @@ else:
         # Filtrar apenas notícias da última 1 hora (3600 segundos)
         # Feedparser retorna UTC naive, então comparamos com utcnow naive
         now_utc = datetime.utcnow()
-        # Filtrar apenas notícias dos últimos 90 minutos (5400 segundos)
-        # Ajustado conforme pedido do usuário
+        # Filtrar apenas notícias dentro da janela de tempo atual (controlada pelo botão)
+        # Feedparser retorna UTC naive, então comparamos com utcnow naive
         now_utc = datetime.utcnow()
+        current_window = st.session_state['time_window_sec']
+        
         news_items = [
             item for item in news_items 
-            if 0 <= (now_utc - item['published']).total_seconds() <= 5400
+            if 0 <= (now_utc - item['published']).total_seconds() <= current_window
         ]
     
         if not news_items:
-            st.warning("Nenhuma notícia encontrada nos últimos 90 minutos.")
+            st.warning(f"Nenhuma notícia encontrada nos últimos {current_window/60:.0f} minutos.")
             
         # Layout em Grid/Lista
-        for i, item in enumerate(news_items[:20]): # Limite fixo de 20 para performance
+        limit = st.session_state['max_items']
+        for i, item in enumerate(news_items[:limit]): # Limite dinâmico
             
             # Container Customizado (Card com Fundo Levemente Escuro)
             with st.container(border=True):
@@ -597,3 +606,13 @@ else:
                             else:
                                 st.error("Erro ao ler artigo. (Site pode bloquear scrapers)")
         
+                                st.error("Erro ao ler artigo. (Site pode bloquear scrapers)")
+        
+        # --- Botão Carregar Mais (No final da lista) ---
+        # Se houver notícias (ou mesmo se não houver, pra tentar buscar mais antigas), mostra o botão
+        st.markdown("---")
+        col_more, _ = st.columns([1, 2])
+        if col_more.button("🔄 Carregar notícias mais antigas (+90min)"):
+            st.session_state['time_window_sec'] += 5400 # +90 min
+            st.session_state['max_items'] += 20 # Mostra mais 20 itens
+            st.rerun()
