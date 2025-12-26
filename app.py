@@ -6,6 +6,68 @@ import time
 from datetime import datetime, timedelta
 import nltk
 from bs4 import BeautifulSoup
+import streamlit.components.v1 as components
+
+def native_share_btn(title, url):
+    """
+    Renderiza um botão HTML que aciona o Share Sheet nativo (Mobile/Safari).
+    """
+    # Escapa aspas para evitar quebra no JS
+    safe_title = title.replace("'", "\\'")
+    safe_url = url.replace("'", "\\'")
+    
+    components.html(f"""
+    <html>
+        <head>
+            <style>
+                body {{ margin: 0; padding: 0; background: transparent; }}
+                button {{
+                    background-color: transparent;
+                    border: 1px solid #E5E5EA;
+                    border-radius: 8px;
+                    padding: 6px 12px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                    color: #007AFF;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    transition: all 0.2s;
+                    width: 100%;
+                    justify-content: center;
+                }}
+                button:hover {{
+                    background-color: rgba(0, 122, 255, 0.1);
+                }}
+            </style>
+        </head>
+        <body>
+            <button onclick="share()">
+                📤 Compartilhar
+            </button>
+            <script>
+                function share() {{
+                    if (navigator.share) {{
+                        navigator.share({{
+                            title: '{safe_title}',
+                            text: 'Confira esta notícia: {safe_title}',
+                            url: '{safe_url}'
+                        }}).then(() => {{
+                            console.log('Compartilhado com sucesso!');
+                        }}).catch((error) => {{
+                            console.log('Erro ao compartilhar', error);
+                        }});
+                    }} else {{
+                        // Fallback Simples (Alert)
+                        alert('Seu navegador não suporta compartilhamento nativo. O link é: {safe_url}');
+                    }}
+                }}
+            </script>
+        </body>
+    </html>
+    """, height=40)
 
 try:
     nltk.data.find('tokenizers/punkt')
@@ -339,6 +401,16 @@ st.markdown(f"""
     }}
     a {{ text-decoration: none; }}
     
+    /* Enhanced News Title */
+    .news-title {{
+        display: block;
+        font-size: 20px !important;
+        font-weight: 700 !important;
+        line-height: 1.4 !important;
+        margin-top: 4px;
+        margin-bottom: 8px;
+    }}
+    
     /* CSS Específico para o Header Botões */
     button[key="theme_btn"] {{
         background-color: transparent !important;
@@ -559,15 +631,21 @@ else:
                 st.markdown("") # Espaçamento
                 
                 # --- Ações ---
-                if api_key_input:
-                    if st.button(f"✨ Resumir com IA", key=f"btn_{i}", help="Gera um resumo rápido usando Gemini"):
-                        with st.spinner("Lendo e resumindo..."):
-                            text = extract_article_content(item['link'])
-                            if text:
-                                resumo = summarize_with_gemini(text, api_key_input)
-                                st.info(f"**Resumo da Notícia:**\n\n{resumo}")
-                            else:
-                                st.error("Erro ao ler artigo. (Site pode bloquear scrapers)")
+                col_share, col_summary = st.columns([1, 4])
+                
+                with col_share:
+                    native_share_btn(item['title'], item['link'])
+                    
+                with col_summary:
+                    if api_key_input:
+                        if st.button(f"✨ Resumir com IA", key=f"btn_{i}", help="Gera um resumo rápido usando Gemini"):
+                            with st.spinner("Lendo e resumindo..."):
+                                text = extract_article_content(item['link'])
+                                if text:
+                                    resumo = summarize_with_gemini(text, api_key_input)
+                                    st.info(f"**Resumo da Notícia:**\n\n{resumo}")
+                                else:
+                                    st.error("Erro ao ler artigo. (Site pode bloquear scrapers)")
         
         # --- Botão Carregar Mais (No final da lista) ---
         # Se houver notícias (ou mesmo se não houver, pra tentar buscar mais antigas), mostra o botão
